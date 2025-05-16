@@ -48,7 +48,11 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/dashboard',
     },
     {
-        title: 'Barangay Info',
+        title: 'Barangays',
+        href: '/barangays',
+    },
+    {
+        title: 'Info',
         href: '/barangay-info',
     }
 ];

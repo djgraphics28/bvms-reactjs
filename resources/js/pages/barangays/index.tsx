@@ -175,7 +175,7 @@ export default function Barangays() {
                             <GoogleMap
                                 mapContainerStyle={{ width: '100%', height: '100%' }}
                                 center={mapCenter}
-                                zoom={16}
+                                zoom={14}
                             >
                                 {barangays.map((barangay) => (
                                     <Marker
