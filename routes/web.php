@@ -1,17 +1,18 @@
 <?php
 
-use App\Http\Controllers\BarangayController;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DashboardController;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DriverController;
+use App\Http\Controllers\VehicleController;
+use App\Http\Controllers\BarangayController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('dashboard', function () {
-        return Inertia::render('dashboard');
-    })->name('dashboard');
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::resource('barangays', BarangayController::class);
     Route::get('barangays/{id}/info', [BarangayController::class, 'info'])->name('barangays.info');
@@ -30,6 +31,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('barangay/{id}/vehicle', [BarangayController::class, 'storeVehicle'])->name('barangay.vehicle.store');
     Route::put('barangay/{barangayId}/vehicle/{vehicleId}', [BarangayController::class, 'updateVehicle'])->name('barangay.vehicle.update');
     Route::delete('barangay/{barangayId}/vehicle/{vehicleId}', [BarangayController::class, 'destroyVehicle'])->name('barangay.vehicle.destroy');
+
+    Route::resource('drivers', DriverController::class);
+    Route::resource('vehicles', VehicleController::class);
+    Route::get('vehicles/{id}/location', [VehicleController::class, 'location'])->name('vehicles.location');
+    Route::get('vehicles/{id}/get-location', [VehicleController::class, 'getLocations'])->name('vehicles.getLocations');
 
 });
 

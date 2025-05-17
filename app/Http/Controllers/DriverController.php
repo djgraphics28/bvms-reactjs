@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use App\Models\Driver;
+use App\Models\Barangay;
 use Illuminate\Http\Request;
 
 class DriverController extends Controller
@@ -14,7 +15,8 @@ class DriverController extends Controller
     public function index()
     {
         return Inertia::render('drivers/index', [
-            'drivers' => Driver::all()
+            'drivers' => Driver::with(['barangay', 'user'])->get(),
+            'barangays' => Barangay::all(),
         ]);
     }
 

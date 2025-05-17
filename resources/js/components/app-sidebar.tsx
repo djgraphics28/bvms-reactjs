@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { AlignHorizontalSpaceAround, BookOpen, Building, Folder, LayoutGrid, Pin, Users2 } from 'lucide-react';
+import { AlignHorizontalSpaceAround, BookOpen, Building, Folder, LayoutGrid, Pin, Truck, Users2 } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -22,6 +22,11 @@ const mainNavItems: NavItem[] = [
         title: 'Drivers',
         href: '/drivers',
         icon: Users2,
+    },
+    {
+        title: 'Vehicles',
+        href: '/vehicles',
+        icon: Truck,
     },
     {
         title: 'Incident Reports',
