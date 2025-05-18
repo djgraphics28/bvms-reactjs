@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\IncidentReportController;
+use App\Models\IncidentReport;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DriverController;
@@ -36,6 +38,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('vehicles', VehicleController::class);
     Route::get('vehicles/{id}/location', [VehicleController::class, 'location'])->name('vehicles.location');
     Route::get('vehicles/{id}/get-location', [VehicleController::class, 'getLocations'])->name('vehicles.getLocations');
+
+    Route::resource('incident-reports', IncidentReportController::class);
 
 });
 
