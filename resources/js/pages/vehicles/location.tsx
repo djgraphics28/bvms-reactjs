@@ -2,7 +2,7 @@ import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
-import { GoogleMap, LoadScript, Polyline, Marker } from '@react-google-maps/api';
+import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
@@ -42,7 +42,7 @@ interface Props {
 
 export default function Location({ vehicle }: Props) {
     const [locations, setLocations] = useState<VehicleLocation[]>([]);
-    const [center, setCenter] = useState({ lat: 15.9061, lng: 120.5853 }); // Villasis
+    const [center, setCenter] = useState({ lat: 15.9061, lng: 120.5853 });
     const [mapError, setMapError] = useState<string | null>(null);
     const [isMapLoaded, setIsMapLoaded] = useState(false);
     const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -80,15 +80,10 @@ export default function Location({ vehicle }: Props) {
 
     useEffect(() => {
         fetchLocations();
-        const interval = setInterval(fetchLocations, 5000); // Update every 5 seconds
+        const interval = setInterval(fetchLocations, 2000); // Update every 2 seconds
 
         return () => clearInterval(interval);
     }, [fetchLocations]);
-
-    const path = locations.map(location => ({
-        lat: parseFloat(location.latitude),
-        lng: parseFloat(location.longitude)
-    }));
 
     const latestLocation = locations.length > 0 ? locations[locations.length - 1] : null;
 
@@ -166,26 +161,13 @@ export default function Location({ vehicle }: Props) {
                                     center={center}
                                     zoom={18}
                                     options={{
-                                        streetViewControl: true,
+                                        streetViewControl: false,
                                         mapTypeControl: false,
                                         fullscreenControl: false
                                     }}
                                     onLoad={onMapLoad}
                                     onUnmount={onUnmount}
                                 >
-                                    <Polyline
-                                        path={path}
-                                        options={{
-                                            strokeColor: '#0000FF',
-                                            strokeOpacity: 1,
-                                            strokeWeight: 4,
-                                            clickable: false,
-                                            draggable: false,
-                                            editable: false,
-                                            visible: true,
-                                            zIndex: 1
-                                        }}
-                                    />
                                     {latestLocation && (
                                         <Marker
                                             position={{
