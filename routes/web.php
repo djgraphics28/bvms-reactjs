@@ -8,7 +8,7 @@ use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\BarangayController;
 
 Route::get('/', function () {
-    return Inertia::render('welcome');
+    return redirect()->route('login');
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
