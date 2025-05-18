@@ -25,17 +25,21 @@ class DriverController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'drivers_license_number' => 'required|string|max:255',
-            'contact_number' => 'nullable|string|max:255',
-            'user_id' => 'nullable|exists:users,id',
-            'barangay_id' => 'required|exists:barangays,id',
-        ]);
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'drivers_license_number' => 'required|string|max:255',
+                'contact_number' => 'nullable|string|max:255',
+                'user_id' => 'nullable|exists:users,id',
+                'barangay_id' => 'required|exists:barangays,id',
+            ]);
 
-        Driver::create($validated);
+            Driver::create($validated);
 
-        return redirect()->back();
+            return redirect()->back();
+        } catch (\Exception $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 
     /**

@@ -8,4 +8,6 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-// Route::get('/vehicles/{id}/location', [LocationController::class, 'getLocations'])->name('vehicles.location');
+Route::get('/vehicles/{id}/get-location', [LocationController::class, 'getLocations'])->name('api.vehicles.get-location');
+//store Location
+Route::post('/store-location', [LocationController::class, 'storeLocation'])->name('vehicles.location.store');

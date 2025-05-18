@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import { GoogleMap, LoadScript, Polyline, Marker } from '@react-google-maps/api';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -18,69 +18,87 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const GOOGLE_MAPS_API_KEY = 'AIzaSyC_WZ0T_FCfAV_G1yfuBGozFa2zOX9l82c';
+
 interface VehicleLocation {
     id: number;
-    latitude: number;
-    longitude: number;
-    timestamp: string;
+    latitude: string;
+    longitude: string;
+    created_at: string;
     vehicle_id: number;
 }
 
+interface Vehicle {
+    id: number;
+    plate_number: string;
+    brand: string;
+    model: string;
+    color: string;
+    name: string;
+}
+
 interface Props {
-    vehicle: {
-        id: number;
-        name: string;
-    };
+    vehicle: Vehicle;
 }
 
 export default function Location({ vehicle }: Props) {
     const [locations, setLocations] = useState<VehicleLocation[]>([]);
     const [center, setCenter] = useState({ lat: 15.9061, lng: 120.5853 }); // Villasis
+    const [mapError, setMapError] = useState<string | null>(null);
+    const [isMapLoaded, setIsMapLoaded] = useState(false);
+    const [map, setMap] = useState<google.maps.Map | null>(null);
 
     const mapContainerStyle = {
         width: '100%',
         height: '100%'
     };
 
-    const options = {
-        strokeColor: '#FF0000',
-        strokeOpacity: 0.8,
-        strokeWeight: 2,
-        fillColor: '#FF0000',
-        fillOpacity: 0.35,
-        clickable: false,
-        draggable: false,
-        editable: false,
-        visible: true,
-        zIndex: 1
-    };
+    const fetchLocations = useCallback(async () => {
+        try {
+            const response = await axios.get(`/vehicles/${vehicle.id}/get-location`);
+            const data: VehicleLocation[] = response.data;
+            setLocations(data);
+
+            // Set center to the latest location if available
+            if (data.length > 0) {
+                const latest = data[data.length - 1];
+                const newCenter = {
+                    lat: parseFloat(latest.latitude),
+                    lng: parseFloat(latest.longitude)
+                };
+                setCenter(newCenter);
+
+                // Pan to new location if map is already loaded
+                if (map) {
+                    map.panTo(newCenter);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching locations:', error);
+            setMapError('Failed to fetch location data');
+        }
+    }, [vehicle.id, map]);
 
     useEffect(() => {
-        const fetchLocations = async () => {
-            try {
-                const response = await axios.get(`/vehicles/${vehicle.id}/get-location`);
-                setLocations(response.data);
-
-                // Set center to the latest location if available
-                if (response.data.length > 0) {
-                    const latest = response.data[response.data.length - 1];
-                    setCenter({ lat: latest.latitude, lng: latest.longitude });
-                }
-            } catch (error) {
-                console.error('Error fetching locations:', error);
-            }
-        };
-
         fetchLocations();
         const interval = setInterval(fetchLocations, 5000); // Update every 5 seconds
 
         return () => clearInterval(interval);
-    }, [vehicle.id]);
+    }, [fetchLocations]);
 
     const path = locations.map(location => ({
-        lat: location.latitude,
-        lng: location.longitude
+        lat: parseFloat(location.latitude),
+        lng: parseFloat(location.longitude)
     }));
+
+    const latestLocation = locations.length > 0 ? locations[locations.length - 1] : null;
+
+    const onMapLoad = useCallback((map: google.maps.Map) => {
+        setMap(map);
+    }, []);
+
+    const onUnmount = useCallback(() => {
+        setMap(null);
+    }, []);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -90,11 +108,11 @@ export default function Location({ vehicle }: Props) {
                     <div className="border-sidebar-border/70 dark:border-sidebar-border relative aspect-video overflow-hidden rounded-xl border bg-white dark:bg-gray-800 p-4 shadow-sm">
                         <div className="flex flex-col h-full justify-between">
                             <div className="w-full h-32 mb-4">
-                                <img
+                                {/* <img
                                     src="/placeholder-vehicle.png"
                                     alt={`${vehicle.brand} ${vehicle.model}`}
                                     className="w-full h-full object-cover rounded-lg"
-                                />
+                                /> */}
                             </div>
                             <div className="text-sm text-gray-500 dark:text-gray-400">Vehicle Description</div>
                             <div className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -110,13 +128,13 @@ export default function Location({ vehicle }: Props) {
                         <div className="flex flex-col h-full justify-between">
                             <div className="text-sm text-gray-500 dark:text-gray-400">Current Location</div>
                             <div className="text-xl font-semibold text-gray-900 dark:text-white">
-                                {locations.length > 0 ?
-                                    `${locations[locations.length - 1].latitude.toFixed(4)}, ${locations[locations.length - 1].longitude.toFixed(4)}`
+                                {latestLocation ?
+                                    `${parseFloat(latestLocation.latitude).toFixed(6)}, ${parseFloat(latestLocation.longitude).toFixed(6)}`
                                     : 'No Data'}
                             </div>
                             <div className="text-sm text-gray-500 dark:text-gray-400">
-                                {locations.length > 0 ?
-                                    new Date(locations[locations.length - 1].timestamp).toLocaleTimeString()
+                                {latestLocation ?
+                                    new Date(latestLocation.created_at).toLocaleString()
                                     : '--:--'}
                             </div>
                         </div>
@@ -133,43 +151,62 @@ export default function Location({ vehicle }: Props) {
                     </div>
                 </div>
                 <div className="border-sidebar-border/70 dark:border-sidebar-border relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border md:min-h-min">
-                    <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
-                        <GoogleMap
-                            mapContainerStyle={mapContainerStyle}
-                            center={center}
-                            zoom={18}
+                    {mapError ? (
+                        <div className="flex items-center justify-center h-full text-red-500">
+                            {mapError}
+                        </div>
+                    ) : (
+                        <LoadScript
+                            googleMapsApiKey={GOOGLE_MAPS_API_KEY}
+                            onLoad={() => setIsMapLoaded(true)}
                         >
-                            <Polyline
-                                path={path}
-                                options={{
-                                    strokeColor: '#0000FF',
-                                    strokeOpacity: 1,
-                                    strokeWeight: 4,
-                                    fillColor: '#0000FF',
-                                    fillOpacity: 0.35,
-                                    clickable: false,
-                                    draggable: false,
-                                    editable: false,
-                                    visible: true,
-                                    zIndex: 1
-                                }}
-                            />
-                            {/* Current position marker with animation */}
-                            {locations.length > 0 && (
-                                <Marker
-                                    position={{
-                                        lat: locations[locations.length - 1].latitude,
-                                        lng: locations[locations.length - 1].longitude
+                            {isMapLoaded ? (
+                                <GoogleMap
+                                    mapContainerStyle={mapContainerStyle}
+                                    center={center}
+                                    zoom={18}
+                                    options={{
+                                        streetViewControl: true,
+                                        mapTypeControl: false,
+                                        fullscreenControl: false
                                     }}
-                                    icon={{
-                                        url: "https://maps.google.com/mapfiles/kml/shapes/cabs.png",
-                                        scaledSize: new window.google.maps.Size(32, 32)
-                                    }}
-                                    animation={window.google.maps.Animation.BOUNCE}
-                                />
+                                    onLoad={onMapLoad}
+                                    onUnmount={onUnmount}
+                                >
+                                    <Polyline
+                                        path={path}
+                                        options={{
+                                            strokeColor: '#0000FF',
+                                            strokeOpacity: 1,
+                                            strokeWeight: 4,
+                                            clickable: false,
+                                            draggable: false,
+                                            editable: false,
+                                            visible: true,
+                                            zIndex: 1
+                                        }}
+                                    />
+                                    {latestLocation && (
+                                        <Marker
+                                            position={{
+                                                lat: parseFloat(latestLocation.latitude),
+                                                lng: parseFloat(latestLocation.longitude)
+                                            }}
+                                            icon={{
+                                                url: "https://maps.google.com/mapfiles/kml/shapes/cabs.png",
+                                                scaledSize: new window.google.maps.Size(32, 32)
+                                            }}
+                                            animation={window.google.maps.Animation.BOUNCE}
+                                        />
+                                    )}
+                                </GoogleMap>
+                            ) : (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="animate-pulse text-gray-500">Loading map...</div>
+                                </div>
                             )}
-                        </GoogleMap>
-                    </LoadScript>
+                        </LoadScript>
+                    )}
                 </div>
             </div>
         </AppLayout>
