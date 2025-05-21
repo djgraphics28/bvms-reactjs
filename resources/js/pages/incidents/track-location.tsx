@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GoogleMap, LoadScript, Marker, Polyline, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, LoadScript, Marker, DirectionsRenderer, TrafficLayer } from '@react-google-maps/api';
 import AppLayout from '@/layouts/app-layout';
 import { Head } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
@@ -12,18 +12,18 @@ interface Incident {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Dashboard',
-        href: '/dashboard',
-    },
-    {
-        title: 'Incidents',
-        href: '/incident-reports',
-    },
-     {
-        title: 'Track Location',
-        href: '/track-location',
-    }
+  {
+    title: 'Dashboard',
+    href: '/dashboard',
+  },
+  {
+    title: 'Incidents',
+    href: '/incident-reports',
+  },
+  {
+    title: 'Track Location',
+    href: '/track-location',
+  }
 ];
 
 interface Props {
@@ -37,33 +37,24 @@ const mapContainerStyle = {
   height: '100vh',
 };
 
-const polylineOptions = {
-  strokeColor: '#FF0000',
-  strokeOpacity: 1.0,
-  strokeWeight: 3,
-};
-
-interface LatLngLiteral {
-  lat: number;
-  lng: number;
-}
-
 const MapComponent: React.FC<Props> = ({ incident }) => {
-  const [userLocation, setUserLocation] = useState<LatLngLiteral | null>(null);
+  const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [distance, setDistance] = useState<string>('');
   const [duration, setDuration] = useState<string>('');
-  const [path, setPath] = useState<LatLngLiteral[]>([]);
-  const [currentPosition, setCurrentPosition] = useState<LatLngLiteral | null>(null);
-  const [progressPath, setProgressPath] = useState<LatLngLiteral[]>([]);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const [currentPosition, setCurrentPosition] = useState<google.maps.LatLngLiteral | null>(null);
+  const [travelMode, setTravelMode] = useState<google.maps.TravelMode>(google.maps.TravelMode.DRIVING);
+  const [showTraffic, setShowTraffic] = useState<boolean>(false);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [eta, setEta] = useState<string>('');
+  const [arrivalTime, setArrivalTime] = useState<string>('');
 
   const incidentLocation = {
     lat: parseFloat(incident.latitude),
     lng: parseFloat(incident.longitude),
   };
 
-  // Get user's current location and start watching position
+  // Get user's current location
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -73,7 +64,11 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
         };
         setUserLocation(newPosition);
         setCurrentPosition(newPosition);
-        setProgressPath(prev => [...prev, newPosition]);
+
+        // Pan map to new position
+        if (map) {
+          map.panTo(newPosition);
+        }
       },
       (error) => {
         console.error('Error tracking location:', error);
@@ -88,18 +83,22 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };
-  }, []);
+  }, [map]);
 
-  // Calculate route and update in real-time
+  // Calculate route
   useEffect(() => {
-    if (currentPosition && mapLoaded) {
+    if (currentPosition && window.google) {
       const directionsService = new google.maps.DirectionsService();
       directionsService.route(
         {
           origin: currentPosition,
           destination: incidentLocation,
-          travelMode: google.maps.TravelMode.DRIVING,
+          travelMode: travelMode,
           provideRouteAlternatives: false,
+          drivingOptions: {
+            departureTime: new Date(),
+            trafficModel: google.maps.TrafficModel.BEST_GUESS
+          }
         },
         (result, status) => {
           if (status === google.maps.DirectionsStatus.OK && result) {
@@ -108,25 +107,38 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
             setDistance(leg.distance?.text || '');
             setDuration(leg.duration?.text || '');
 
-            // Extract detailed path including all steps
-            const pathPoints: LatLngLiteral[] = [];
-            result.routes[0].overview_path.forEach(point => {
-              pathPoints.push({
-                lat: point.lat(),
-                lng: point.lng()
-              });
-            });
-            setPath(pathPoints);
+            // Calculate ETA
+            if (leg.duration?.value) {
+              const now = new Date();
+              const arrival = new Date(now.getTime() + leg.duration.value * 1000);
+              setEta(arrival.toLocaleTimeString());
+              setArrivalTime(`ETA: ${arrival.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+            }
           } else {
             console.error('Directions request failed:', status);
           }
         }
       );
     }
-  }, [currentPosition, incidentLocation, mapLoaded]);
+  }, [currentPosition, incidentLocation, travelMode]);
 
-  const handleLoad = (map: google.maps.Map) => {
-    setMapLoaded(true);
+  const handleMapLoad = (map: google.maps.Map) => {
+    setMap(map);
+  };
+
+  const handleTravelModeChange = (mode: google.maps.TravelMode) => {
+    setTravelMode(mode);
+  };
+
+  const toggleTraffic = () => {
+    setShowTraffic(!showTraffic);
+  };
+
+  const centerMap = () => {
+    if (map && currentPosition) {
+      map.panTo(currentPosition);
+      map.setZoom(15);
+    }
   };
 
   return (
@@ -136,76 +148,224 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
         googleMapsApiKey={GOOGLE_MAPS_API_KEY}
         libraries={["places", "geometry"]}
       >
-        <GoogleMap
-          mapContainerStyle={mapContainerStyle}
-          center={currentPosition || incidentLocation}
-          zoom={14}
-          onLoad={handleLoad}
-        >
-          {/* Current location marker */}
-          {currentPosition && (
-            <Marker
-              position={currentPosition}
-              label="You"
-              icon={{
-                url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-              }}
-            />
-          )}
-
-          {/* Incident location marker */}
-          <Marker
-            position={incidentLocation}
-            label="Incident"
-            icon={{
-              url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-            }}
-          />
-
-          {/* Show traveled path */}
-          <Polyline
-            path={progressPath}
+        <div style={{ position: 'relative', height: '100vh' }}>
+          <GoogleMap
+            mapContainerStyle={mapContainerStyle}
+            center={currentPosition || incidentLocation}
+            zoom={15}
+            onLoad={handleMapLoad}
             options={{
-              strokeColor: '#4285F4',
-              strokeOpacity: 1.0,
-              strokeWeight: 4,
+              zoomControl: true,
+              mapTypeControl: true,
+              scaleControl: true,
+              streetViewControl: true,
+              rotateControl: true,
+              fullscreenControl: true
             }}
-          />
+          >
+            {/* Current location marker */}
+            {currentPosition && (
+              <Marker
+                position={currentPosition}
+                label="You"
+                icon={{
+                  url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+                }}
+              />
+            )}
 
-          {/* Show route using DirectionsRenderer */}
-          {directions && (
-            <DirectionsRenderer
-              directions={directions}
-              options={{
-                suppressMarkers: true,
-                preserveViewport: true,
-                polylineOptions: {
-                  strokeColor: '#FF0000',
-                  strokeOpacity: 0.8,
-                  strokeWeight: 6
-                }
+            {/* Incident location marker */}
+            <Marker
+              position={incidentLocation}
+              label="Incident"
+              icon={{
+                url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
               }}
             />
-          )}
-        </GoogleMap>
 
-        {/* Display distance and duration */}
-        {distance && duration && (
+            {/* Show route using DirectionsRenderer */}
+            {directions && (
+              <DirectionsRenderer
+                directions={directions}
+                options={{
+                  suppressMarkers: true,
+                  preserveViewport: true,
+                  polylineOptions: {
+                    strokeColor: '#1a73e8',
+                    strokeOpacity: 0.8,
+                    strokeWeight: 6,
+                    zIndex: 1
+                  }
+                }}
+              />
+            )}
+
+            {/* Traffic layer */}
+            {showTraffic && <TrafficLayer />}
+          </GoogleMap>
+
+          {/* Controls Panel */}
+          <div style={{
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+            padding: '10px',
+            zIndex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px'
+          }}>
+            <button
+              onClick={() => handleTravelModeChange(google.maps.TravelMode.DRIVING)}
+              style={{
+                backgroundColor: travelMode === google.maps.TravelMode.DRIVING ? '#e8f0fe' : 'white',
+                color: travelMode === google.maps.TravelMode.DRIVING ? '#1a73e8' : 'black',
+                border: '1px solid #dadce0',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                cursor: 'pointer'
+              }}
+            >
+              🚗 Drive
+            </button>
+            <button
+              onClick={() => handleTravelModeChange(google.maps.TravelMode.WALKING)}
+              style={{
+                backgroundColor: travelMode === google.maps.TravelMode.WALKING ? '#e8f0fe' : 'white',
+                color: travelMode === google.maps.TravelMode.WALKING ? '#1a73e8' : 'black',
+                border: '1px solid #dadce0',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                cursor: 'pointer'
+              }}
+            >
+              🚶 Walk
+            </button>
+            <button
+              onClick={() => handleTravelModeChange(google.maps.TravelMode.TRANSIT)}
+              style={{
+                backgroundColor: travelMode === google.maps.TravelMode.TRANSIT ? '#e8f0fe' : 'white',
+                color: travelMode === google.maps.TravelMode.TRANSIT ? '#1a73e8' : 'black',
+                border: '1px solid #dadce0',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                cursor: 'pointer'
+              }}
+            >
+              🚆 Transit
+            </button>
+            <button
+              onClick={toggleTraffic}
+              style={{
+                backgroundColor: showTraffic ? '#e8f0fe' : 'white',
+                color: showTraffic ? '#1a73e8' : 'black',
+                border: '1px solid #dadce0',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                cursor: 'pointer'
+              }}
+            >
+              🚦 Traffic
+            </button>
+            <button
+              onClick={centerMap}
+              style={{
+                backgroundColor: 'white',
+                border: '1px solid #dadce0',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                cursor: 'pointer'
+              }}
+            >
+              🎯 Center
+            </button>
+          </div>
+
+          {/* Route Information Panel */}
           <div style={{
             position: 'absolute',
             bottom: '20px',
             left: '20px',
+            right: '20px',
             backgroundColor: 'white',
-            padding: '10px',
-            borderRadius: '5px',
+            borderRadius: '8px',
             boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-            zIndex: 1
+            padding: '16px',
+            zIndex: 1,
+            maxWidth: '400px'
           }}>
-            <h3>Route Information</h3>
-            <p>Distance Remaining: {distance}</p>
-            <p>Estimated Time: {duration}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', color: '#1a73e8' }}>Route to Incident</h3>
+                <p style={{ margin: '4px 0', fontSize: '14px', color: '#5f6368' }}>{incident.title}</p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>{distance}</p>
+                <p style={{ margin: '4px 0 0', fontSize: '14px' }}>{duration}</p>
+              </div>
+            </div>
+
+            {arrivalTime && (
+              <div style={{
+                backgroundColor: '#f1f3f4',
+                borderRadius: '4px',
+                padding: '8px',
+                marginTop: '8px',
+                display: 'flex',
+                alignItems: 'center'
+              }}>
+                <span style={{
+                  backgroundColor: '#1a73e8',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: '8px'
+                }}>
+                  ⏱
+                </span>
+                <span>{arrivalTime}</span>
+              </div>
+            )}
+
+            <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${currentPosition?.lat},${currentPosition?.lng}&destination=${incidentLocation.lat},${incidentLocation.lng}&travelmode=${travelMode.toLowerCase()}`, '_blank')}
+                style={{
+                  backgroundColor: '#1a73e8',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                  flex: 1
+                }}
+              >
+                Open in Google Maps
+              </button>
+              <button
+                onClick={() => window.open(`https://www.waze.com/ul?ll=${incidentLocation.lat}%2C${incidentLocation.lng}&navigate=yes`, '_blank')}
+                style={{
+                  backgroundColor: '#33ccff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                  flex: 1
+                }}
+              >
+                Open in Waze
+              </button>
+            </div>
           </div>
-        )}
+        </div>
       </LoadScript>
     </AppLayout>
   );
