@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleMap, LoadScript, Marker, Polyline, DirectionsRenderer } from '@react-google-maps/api';
+import AppLayout from '@/layouts/app-layout';
+import { Head } from '@inertiajs/react';
+import { type BreadcrumbItem } from '@/types';
 
 interface Incident {
   latitude: string;
@@ -8,6 +11,21 @@ interface Incident {
   description: string;
   // Add other fields as necessary
 }
+
+const breadcrumbs: BreadcrumbItem[] = [
+    {
+        title: 'Dashboard',
+        href: '/dashboard',
+    },
+    {
+        title: 'Incidents',
+        href: '/incident-reports',
+    },
+     {
+        title: 'Track Location',
+        href: '/track-location',
+    }
+];
 
 interface Props {
   incident: Incident;
@@ -88,6 +106,8 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
   }, [userLocation, incidentLocation]);
 
   return (
+     <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Incidents Management" />
     <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
@@ -147,6 +167,7 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
         </div>
       )}
     </LoadScript>
+    </AppLayout>
   );
 };
 
