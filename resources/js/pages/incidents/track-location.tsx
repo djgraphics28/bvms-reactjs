@@ -9,7 +9,6 @@ interface Incident {
   longitude: string;
   title: string;
   description: string;
-  // Add other fields as necessary
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -62,6 +61,9 @@ interface DirectionsResult {
       duration?: {
         text: string;
       };
+      steps: {
+        path: google.maps.LatLng[];
+      }[];
     }[];
   }[];
 }
@@ -72,34 +74,48 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
   const [distance, setDistance] = useState<string>('');
   const [duration, setDuration] = useState<string>('');
   const [path, setPath] = useState<LatLngLiteral[]>([]);
+  const [currentPosition, setCurrentPosition] = useState<LatLngLiteral | null>(null);
+  const [progressPath, setProgressPath] = useState<LatLngLiteral[]>([]);
 
   const incidentLocation = {
     lat: parseFloat(incident.latitude),
     lng: parseFloat(incident.longitude),
   };
 
-  // Get user's current location
+  // Get user's current location and start watching position
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
+    const watchId = navigator.geolocation.watchPosition(
       (position) => {
-        setUserLocation({
+        const newPosition = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        });
+        };
+        setUserLocation(newPosition);
+        setCurrentPosition(newPosition);
+        setProgressPath(prev => [...prev, newPosition]);
       },
       (error) => {
-        console.error('Error getting user location:', error);
+        console.error('Error tracking location:', error);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
       }
     );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
   }, []);
 
-  // Calculate route from user location to incident location
+  // Calculate route and update in real-time
   useEffect(() => {
-    if (userLocation && window.google) {
+    if (currentPosition && window.google) {
       const directionsService = new window.google.maps.DirectionsService();
       directionsService.route(
         {
-          origin: userLocation,
+          origin: currentPosition,
           destination: incidentLocation,
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
@@ -110,22 +126,22 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
             setDistance(leg.distance?.text || '');
             setDuration(leg.duration?.text || '');
 
-            // Extract path for polyline
+            // Extract detailed path including all steps
             const pathPoints: LatLngLiteral[] = [];
-            result.routes[0].overview_path.forEach(point => {
-              pathPoints.push({
-                lat: point.lat(),
-                lng: point.lng()
+            leg.steps.forEach(step => {
+              step.path.forEach(point => {
+                pathPoints.push({
+                  lat: point.lat(),
+                  lng: point.lng()
+                });
               });
             });
             setPath(pathPoints);
-          } else {
-            console.error('Directions request failed due to ' + status);
           }
         }
       );
     }
-  }, [userLocation, incidentLocation]);
+  }, [currentPosition, incidentLocation]);
 
   return (
      <AppLayout breadcrumbs={breadcrumbs}>
@@ -133,13 +149,13 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
     <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
-        center={userLocation || incidentLocation}
+        center={currentPosition || incidentLocation}
         zoom={14}
       >
-        {/* User's location marker */}
-        {userLocation && (
+        {/* Current location marker */}
+        {currentPosition && (
           <Marker
-            position={userLocation}
+            position={currentPosition}
             label="You"
             icon={{
               url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
@@ -156,18 +172,25 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
           }}
         />
 
-        {/* Render directions - you can choose to use either DirectionsRenderer or Polyline */}
-        {directions && (
-          <>
-            {/* Option 1: Using DirectionsRenderer (shows full route with turns) */}
-            <DirectionsRenderer directions={directions} />
+        {/* Show traveled path */}
+        <Polyline
+          path={progressPath}
+          options={{
+            strokeColor: '#4285F4',
+            strokeOpacity: 1.0,
+            strokeWeight: 4,
+          }}
+        />
 
-            {/* Option 2: Using Polyline (simpler line) */}
-            {/* <Polyline
-              path={path}
-              options={polylineOptions}
-            /> */}
-          </>
+        {/* Show remaining route */}
+        {directions && (
+          <DirectionsRenderer
+            directions={directions}
+            options={{
+              suppressMarkers: true,
+              preserveViewport: true
+            }}
+          />
         )}
       </GoogleMap>
 
@@ -184,8 +207,8 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
           zIndex: 1
         }}>
           <h3>Route Information</h3>
-          <p>Distance: {distance}</p>
-          <p>Estimated Travel Time: {duration}</p>
+          <p>Distance Remaining: {distance}</p>
+          <p>Estimated Time: {duration}</p>
         </div>
       )}
     </LoadScript>
