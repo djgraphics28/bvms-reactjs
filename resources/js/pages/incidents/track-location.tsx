@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { GoogleMap, LoadScript, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import React, { useState, useEffect } from 'react';
+import { GoogleMap, LoadScript, Marker, Polyline, DirectionsRenderer } from '@react-google-maps/api';
 
 interface Incident {
   latitude: string;
@@ -20,11 +20,18 @@ const mapContainerStyle = {
   height: '100vh',
 };
 
+const polylineOptions = {
+  strokeColor: '#FF0000',
+  strokeOpacity: 1.0,
+  strokeWeight: 3,
+};
+
 const MapComponent: React.FC<Props> = ({ incident }) => {
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [distance, setDistance] = useState<string>('');
   const [duration, setDuration] = useState<string>('');
+  const [path, setPath] = useState<google.maps.LatLngLiteral[]>([]);
 
   const incidentLocation = {
     lat: parseFloat(incident.latitude),
@@ -62,6 +69,16 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
             const leg = result.routes[0].legs[0];
             setDistance(leg.distance?.text || '');
             setDuration(leg.duration?.text || '');
+
+            // Extract path for polyline
+            const pathPoints: google.maps.LatLngLiteral[] = [];
+            result.routes[0].overview_path.forEach(point => {
+              pathPoints.push({
+                lat: point.lat(),
+                lng: point.lng()
+              });
+            });
+            setPath(pathPoints);
           } else {
             console.error('Directions request failed due to ' + status);
           }
@@ -97,13 +114,33 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
           }}
         />
 
-        {/* Render directions */}
-        {directions && <DirectionsRenderer directions={directions} />}
+        {/* Render directions - you can choose to use either DirectionsRenderer or Polyline */}
+        {directions && (
+          <>
+            {/* Option 1: Using DirectionsRenderer (shows full route with turns) */}
+            <DirectionsRenderer directions={directions} />
+
+            {/* Option 2: Using Polyline (simpler line) */}
+            {/* <Polyline
+              path={path}
+              options={polylineOptions}
+            /> */}
+          </>
+        )}
       </GoogleMap>
 
       {/* Display distance and duration */}
       {distance && duration && (
-        <div style={{ padding: '10px' }}>
+        <div style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '20px',
+          backgroundColor: 'white',
+          padding: '10px',
+          borderRadius: '5px',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+          zIndex: 1
+        }}>
           <h3>Route Information</h3>
           <p>Distance: {distance}</p>
           <p>Estimated Travel Time: {duration}</p>
