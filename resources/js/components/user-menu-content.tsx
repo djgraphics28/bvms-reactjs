@@ -26,7 +26,6 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
             router.post(route('logout'));
         }
     };
-
     return (
         <>
             <DropdownMenuLabel className="p-0 font-normal">

@@ -156,7 +156,7 @@ class IncidentReportController extends Controller
             $imagePath = $image->storeAs('incident_images', $filename, 'public');
         }
 
-        IncidentReport::create([
+        $incident = IncidentReport::create([
             'latitude' => $validated['latitude'],
             'longitude' => $validated['longitude'],
             'title' => $validated['title'],
@@ -167,6 +167,10 @@ class IncidentReportController extends Controller
             'image_path' => $imagePath,
             'barangay_id' => $validated['barangay_id'] ?? null,
         ]);
+
+        // Send notification email to user with ID 1
+        $admin = \App\Models\User::find(1);
+        \Mail::to($admin->email)->send(new \App\Mail\NewIncidentReport($incident));
 
         return response()->json([
             'message' => 'Incident report submitted successfully.'

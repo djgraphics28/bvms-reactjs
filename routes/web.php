@@ -1,19 +1,25 @@
 <?php
 
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\IncidentReportController;
-use App\Models\IncidentReport;
 use Inertia\Inertia;
+use App\Models\IncidentReport;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DriverController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\BarangayController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\TwoFactorController;
+use App\Http\Controllers\IncidentReportController;
 
 Route::get('/', function () {
     return redirect()->route('login');
 })->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware('auth')->group(function () {
+    Route::get('/2fa/verify', [TwoFactorController::class, 'show'])->name('2fa.show');
+    Route::post('/2fa/verify', [TwoFactorController::class, 'verify'])->name('2fa.verify');
+});
+
+Route::middleware(['auth', 'verified', 'twofactor'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::resource('barangays', BarangayController::class);

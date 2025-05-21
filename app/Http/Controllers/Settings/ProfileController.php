@@ -60,4 +60,24 @@ class ProfileController extends Controller
 
         return redirect('/');
     }
+
+    public function update2FA(Request $request)
+    {
+        $request->validate([
+            'is_two_factor_enabled' => 'required|boolean',
+        ]);
+
+        $user = Auth::user();
+        $user->is_two_factor_enabled = $request->is_two_factor_enabled;
+        $user->save();
+
+        return back()->with('status', 'Two-factor authentication setting updated.');
+    }
+
+    public function show2faConfig(Request $request)
+    {
+        return Inertia::render('settings/2fa', [
+            'is_two_factor_enabled' => $request->user()->is_two_factor_enabled,
+        ]);
+    }
 }
