@@ -41,6 +41,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('incident-reports', IncidentReportController::class);
 
+    Route::get('submit-incident-report', [IncidentReportController::class, 'getIncidentReportPage'])->name('submit-incident-report');
+    Route::post('submit-incident-report', [IncidentReportController::class, 'submitIncidentReport'])->name('submit-incident-report.store');
+
+
+
 });
 
 require __DIR__.'/settings.php';
