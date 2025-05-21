@@ -48,34 +48,15 @@ interface LatLngLiteral {
   lng: number;
 }
 
-interface DirectionsResult {
-  routes: {
-    overview_path: {
-      lat(): number;
-      lng(): number;
-    }[];
-    legs: {
-      distance?: {
-        text: string;
-      };
-      duration?: {
-        text: string;
-      };
-      steps: {
-        path: google.maps.LatLng[];
-      }[];
-    }[];
-  }[];
-}
-
 const MapComponent: React.FC<Props> = ({ incident }) => {
   const [userLocation, setUserLocation] = useState<LatLngLiteral | null>(null);
-  const [directions, setDirections] = useState<DirectionsResult | null>(null);
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [distance, setDistance] = useState<string>('');
   const [duration, setDuration] = useState<string>('');
   const [path, setPath] = useState<LatLngLiteral[]>([]);
   const [currentPosition, setCurrentPosition] = useState<LatLngLiteral | null>(null);
   const [progressPath, setProgressPath] = useState<LatLngLiteral[]>([]);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   const incidentLocation = {
     lat: parseFloat(incident.latitude),
@@ -111,16 +92,17 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
 
   // Calculate route and update in real-time
   useEffect(() => {
-    if (currentPosition && window.google) {
-      const directionsService = new window.google.maps.DirectionsService();
+    if (currentPosition && mapLoaded) {
+      const directionsService = new google.maps.DirectionsService();
       directionsService.route(
         {
           origin: currentPosition,
           destination: incidentLocation,
-          travelMode: window.google.maps.TravelMode.DRIVING,
+          travelMode: google.maps.TravelMode.DRIVING,
+          provideRouteAlternatives: false,
         },
         (result, status) => {
-          if (status === window.google.maps.DirectionsStatus.OK && result) {
+          if (status === google.maps.DirectionsStatus.OK && result) {
             setDirections(result);
             const leg = result.routes[0].legs[0];
             setDistance(leg.distance?.text || '');
@@ -128,90 +110,103 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
 
             // Extract detailed path including all steps
             const pathPoints: LatLngLiteral[] = [];
-            leg.steps.forEach(step => {
-              step.path.forEach(point => {
-                pathPoints.push({
-                  lat: point.lat(),
-                  lng: point.lng()
-                });
+            result.routes[0].overview_path.forEach(point => {
+              pathPoints.push({
+                lat: point.lat(),
+                lng: point.lng()
               });
             });
             setPath(pathPoints);
+          } else {
+            console.error('Directions request failed:', status);
           }
         }
       );
     }
-  }, [currentPosition, incidentLocation]);
+  }, [currentPosition, incidentLocation, mapLoaded]);
+
+  const handleLoad = (map: google.maps.Map) => {
+    setMapLoaded(true);
+  };
 
   return (
-     <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Incidents Management" />
-    <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
-      <GoogleMap
-        mapContainerStyle={mapContainerStyle}
-        center={currentPosition || incidentLocation}
-        zoom={14}
+    <AppLayout breadcrumbs={breadcrumbs}>
+      <Head title="Incidents Management" />
+      <LoadScript
+        googleMapsApiKey={GOOGLE_MAPS_API_KEY}
+        libraries={["places", "geometry"]}
       >
-        {/* Current location marker */}
-        {currentPosition && (
+        <GoogleMap
+          mapContainerStyle={mapContainerStyle}
+          center={currentPosition || incidentLocation}
+          zoom={14}
+          onLoad={handleLoad}
+        >
+          {/* Current location marker */}
+          {currentPosition && (
+            <Marker
+              position={currentPosition}
+              label="You"
+              icon={{
+                url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+              }}
+            />
+          )}
+
+          {/* Incident location marker */}
           <Marker
-            position={currentPosition}
-            label="You"
+            position={incidentLocation}
+            label="Incident"
             icon={{
-              url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+              url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
             }}
           />
-        )}
 
-        {/* Incident location marker */}
-        <Marker
-          position={incidentLocation}
-          label="Incident"
-          icon={{
-            url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-          }}
-        />
-
-        {/* Show traveled path */}
-        <Polyline
-          path={progressPath}
-          options={{
-            strokeColor: '#4285F4',
-            strokeOpacity: 1.0,
-            strokeWeight: 4,
-          }}
-        />
-
-        {/* Show remaining route */}
-        {directions && (
-          <DirectionsRenderer
-            directions={directions}
+          {/* Show traveled path */}
+          <Polyline
+            path={progressPath}
             options={{
-              suppressMarkers: true,
-              preserveViewport: true
+              strokeColor: '#4285F4',
+              strokeOpacity: 1.0,
+              strokeWeight: 4,
             }}
           />
-        )}
-      </GoogleMap>
 
-      {/* Display distance and duration */}
-      {distance && duration && (
-        <div style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '20px',
-          backgroundColor: 'white',
-          padding: '10px',
-          borderRadius: '5px',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-          zIndex: 1
-        }}>
-          <h3>Route Information</h3>
-          <p>Distance Remaining: {distance}</p>
-          <p>Estimated Time: {duration}</p>
-        </div>
-      )}
-    </LoadScript>
+          {/* Show route using DirectionsRenderer */}
+          {directions && (
+            <DirectionsRenderer
+              directions={directions}
+              options={{
+                suppressMarkers: true,
+                preserveViewport: true,
+                polylineOptions: {
+                  strokeColor: '#FF0000',
+                  strokeOpacity: 0.8,
+                  strokeWeight: 6
+                }
+              }}
+            />
+          )}
+        </GoogleMap>
+
+        {/* Display distance and duration */}
+        {distance && duration && (
+          <div style={{
+            position: 'absolute',
+            bottom: '20px',
+            left: '20px',
+            backgroundColor: 'white',
+            padding: '10px',
+            borderRadius: '5px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+            zIndex: 1
+          }}>
+            <h3>Route Information</h3>
+            <p>Distance Remaining: {distance}</p>
+            <p>Estimated Time: {duration}</p>
+          </div>
+        )}
+      </LoadScript>
     </AppLayout>
   );
 };
