@@ -44,12 +44,34 @@ const polylineOptions = {
   strokeWeight: 3,
 };
 
+interface LatLngLiteral {
+  lat: number;
+  lng: number;
+}
+
+interface DirectionsResult {
+  routes: {
+    overview_path: {
+      lat(): number;
+      lng(): number;
+    }[];
+    legs: {
+      distance?: {
+        text: string;
+      };
+      duration?: {
+        text: string;
+      };
+    }[];
+  }[];
+}
+
 const MapComponent: React.FC<Props> = ({ incident }) => {
-  const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [userLocation, setUserLocation] = useState<LatLngLiteral | null>(null);
+  const [directions, setDirections] = useState<DirectionsResult | null>(null);
   const [distance, setDistance] = useState<string>('');
   const [duration, setDuration] = useState<string>('');
-  const [path, setPath] = useState<google.maps.LatLngLiteral[]>([]);
+  const [path, setPath] = useState<LatLngLiteral[]>([]);
 
   const incidentLocation = {
     lat: parseFloat(incident.latitude),
@@ -73,23 +95,23 @@ const MapComponent: React.FC<Props> = ({ incident }) => {
 
   // Calculate route from user location to incident location
   useEffect(() => {
-    if (userLocation) {
-      const directionsService = new google.maps.DirectionsService();
+    if (userLocation && window.google) {
+      const directionsService = new window.google.maps.DirectionsService();
       directionsService.route(
         {
           origin: userLocation,
           destination: incidentLocation,
-          travelMode: google.maps.TravelMode.DRIVING,
+          travelMode: window.google.maps.TravelMode.DRIVING,
         },
         (result, status) => {
-          if (status === google.maps.DirectionsStatus.OK && result) {
+          if (status === window.google.maps.DirectionsStatus.OK && result) {
             setDirections(result);
             const leg = result.routes[0].legs[0];
             setDistance(leg.distance?.text || '');
             setDuration(leg.duration?.text || '');
 
             // Extract path for polyline
-            const pathPoints: google.maps.LatLngLiteral[] = [];
+            const pathPoints: LatLngLiteral[] = [];
             result.routes[0].overview_path.forEach(point => {
               pathPoints.push({
                 lat: point.lat(),
